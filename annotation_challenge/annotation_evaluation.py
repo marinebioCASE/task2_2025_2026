@@ -63,8 +63,8 @@ def run(annotations_path, iou_threshold=0.3):
     annot_status = annot_status.replace('UNASSIGNED', 'NA')
     annot_status = annot_status.replace('CREATED', 'NA')
     annot_status['unknown'] = 0
-    annotators = annot_status.columns[2:13].tolist()
-    annot_status.iloc[:, 2:13] = annot_status.iloc[:, 2:13].astype('object')
+    annotators = annot_status.columns[2:len(annot_status.columns)].tolist()
+    annot_status.iloc[:, 2:len(annot_status.columns)] = annot_status.iloc[:, 2:len(annot_status.columns)].astype('object')
 
 
     #uniform labels, remove irrelevant rows, add columns for doublet annotations, sort annotations by datetime and reset index, add info on annotation status
@@ -73,12 +73,13 @@ def run(annotations_path, iou_threshold=0.3):
     annotations['filename'] = annotations['filename'].str.replace('-','_')
     annotations['filename'] = annotations['filename'].str.replace('_000','')
     annotations['dataset'] = annotations['dataset'].str.replace('k','K')
+    annotations = annotations.fillna(value = {"confidence_indicator_label": 2})
     annotations = annotations.drop(annotations[annotations.type == 'WEAK'].index)
     annotations = annotations.drop(annotations[annotations.annotation == 'nan'].index)
     annotations = annotations.sort_values(by='start_datetime').reset_index(drop=True)
     annotations['n_matches'] = 0
     annotations['summed_confidence'] = 0
-    annotations = annotations.merge(annot_status.loc[:,annot_status.columns[1:13].tolist()], how='inner', on='filename',suffixes=(False, False),copy=False)
+    annotations = annotations.merge(annot_status.loc[:,annot_status.columns[1:len(annot_status.columns)].tolist()], how='inner', on='filename',suffixes=(False, False),copy=False)
     annotations['relative_matches'] = 0
     annotations['relative_confidence'] = 0
 
@@ -88,16 +89,18 @@ def run(annotations_path, iou_threshold=0.3):
 
     #compare row to all the other rows
     for i, row in annotations.iterrows():
-        annotations['iou'] = 0
-        for j, other_row in annotations.iterrows():
-             if i != j & j in annotations.index:
+        timefilt_annot = annotations.loc[(annotations['start_datetime'] <= (row.start_datetime + pd.Timedelta(minutes=1))) &
+                                            (annotations['start_datetime'] >= (row.start_datetime - pd.Timedelta(minutes=1)))]
+        timefilt_annot['iou'] = 0
+        for j, other_row in timefilt_annot.iterrows():
+             if i != j & j in timefilt_annot.index:
                 # For each row, compute the minimum end and maximum start with all the ground truths
                 min_end = np.minimum(row['end_datetime'], other_row['end_datetime'])
                 max_start = np.maximum(row['start_datetime'], other_row['start_datetime'])
                 inter = (min_end - max_start).total_seconds()
                 union = (row['end_datetime'] - row['start_datetime']).total_seconds() + (
                     (other_row['end_datetime'] - other_row['start_datetime']).total_seconds()) - inter
-                annotations.iou[j] = inter / union
+                timefilt_annot.iou[j] = inter / union
 
 
         # if no iou matches just collect the row itself
@@ -106,7 +109,7 @@ def run(annotations_path, iou_threshold=0.3):
         # if labels are mix of bma, bmb, and/or bmz collect row and replace label by bmabz
         # if labels are mix of bp20 and bp20plus collect row and replace label with bp20
         # else (if labels don't match at all) collect row itself
-        if not any(annotations['iou'] >= iou_threshold) and i in annotations.index:
+        if not any(timefilt_annot['iou'] >= iou_threshold) and i in timefilt_annot.index:
             row['n_matches'] = 1
             row['summed_confidence'] = row['confidence_indicator_label']
             row[row['annotator']] = 1
@@ -116,9 +119,10 @@ def run(annotations_path, iou_threshold=0.3):
                 ~np.isnan(pd.to_numeric(row[annotators], errors='coerce')))
             merged_annotations = merged_annotations._append(row.to_frame().T)
             annotations = annotations.drop(annotations[annotations['start_datetime'] == row.start_datetime].index)
-        if any(annotations['iou'] >= iou_threshold) and i in annotations.index:
+        if any(timefilt_annot['iou'] >= iou_threshold) and i in timefilt_annot.index:
             temp_annot = row.to_frame().T
-            temp_annot = temp_annot._append(annotations[annotations['iou'] >= iou_threshold].drop('iou',axis=1))
+            temp_annot = temp_annot._append(timefilt_annot[(timefilt_annot['iou'] >= iou_threshold) &
+                                                           (timefilt_annot['annotator']!= row.annotator)].drop('iou',axis=1))
             temp_annot['n_matches'].iloc[0] = temp_annot.shape[0]
             temp_annot['summed_confidence'].iloc[0] = sum(temp_annot['confidence_indicator_label'])
             temp_annot[temp_annot['annotator'].tolist()] = 1
@@ -129,17 +133,29 @@ def run(annotations_path, iou_threshold=0.3):
             if temp_annot['annotation'].nunique() == 1:
                 merged_annotations = merged_annotations._append(temp_annot.iloc[0])
                 annotations = annotations.drop(annotations[annotations['start_datetime'] == row.start_datetime].index)
-                annotations = annotations[annotations['iou'] < iou_threshold]
+                try:
+                    annotations = annotations.drop(timefilt_annot[(timefilt_annot['iou'] >= iou_threshold) &
+                                                           (timefilt_annot['annotator'] != row.annotator)].index,axis=0)
+                except:
+                    print('row already dropped becasue annotations had the exact same start_datetime')
             elif set(temp_annot['annotation']).issubset(['bma','bmb','bmz']):
                 temp_annot['annotation'].iloc[0] = 'bmabz'
                 merged_annotations = merged_annotations._append(temp_annot.iloc[0])
                 annotations = annotations.drop(annotations[annotations['start_datetime'] == row.start_datetime].index)
-                annotations = annotations[annotations['iou'] < iou_threshold]
+                try:
+                    annotations = annotations.drop(timefilt_annot[(timefilt_annot['iou'] >= iou_threshold) &
+                                                                  (timefilt_annot['annotator'] != row.annotator)].index,axis=0)
+                except:
+                    print('row already dropped becasue annotations had the exact same start_datetime')
             elif set(temp_annot['annotation']).issubset(['bp20','bp20plus']):
                 temp_annot['annotation'].iloc[0] = 'bp20'
                 merged_annotations = merged_annotations._append(temp_annot.iloc[0])
                 annotations = annotations.drop(annotations[annotations['start_datetime'] == row.start_datetime].index)
-                annotations = annotations[annotations['iou'] < iou_threshold]
+                try:
+                    annotations = annotations.drop(timefilt_annot[(timefilt_annot['iou'] >= iou_threshold) &
+                                                                  (timefilt_annot['annotator'] != row.annotator)].index,axis=0)
+                except:
+                    print('row already dropped becasue annotations had the exact same start_datetime')
             else:
                 row['n_matches'] = 1
                 row['summed_confidence'] = row['confidence_indicator_label']
