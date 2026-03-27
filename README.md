@@ -1,4 +1,4 @@
-# Supervised detection of strongly-labelled Antarctic blue and fin whale calls (BIODCASE 2025-2026 Task 2) source code
+# BIODCASE 2025-2026 Task 2 : Supervised detection of strongly-labelled Antarctic blue and fin whale calls 
 
 # Scientific context
 
