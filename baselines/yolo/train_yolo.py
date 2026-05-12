@@ -9,7 +9,7 @@ import os
 
 
 def run():
-    YAML_FILE = './custom_joined.yaml'
+    YAML_FILE = './baselines/yolo/custom_joined.yaml'  # Set to './baselines/yolo/custom.yaml' to train with all the classes (instead of joint ones)
     run_name = 'biodcase_baseline' # Change to the name of your run
 
     # Check if CUDA is available
@@ -48,7 +48,7 @@ def run():
         'erasing': 0,
         'crop_fraction': 0,
     }
-    model.train(epochs=20, batch=32, data=YAML_FILE,
+    model.train(epochs=20, batch=32, data=YAML_FILE, seed=24,
                 project=config['path'] + '/runs/' + run_name, resume=False, **best_params, device=0)
 
     if "COMET_API_KEY" in os.environ and comet_ml is not None:

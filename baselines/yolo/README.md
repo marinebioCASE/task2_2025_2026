@@ -53,6 +53,9 @@ When asked if it is for training, answer yes (y). This will only select and proc
 3. Run the preprocess_data.py script and pass the folder to the test folder
 When asked if it is for training, answer no (n). This will process all the background images. 
 
+This will create a dataset for the validation which does not include all the backgrounds. Therefore, this dataset should NOT be used to evaluate the performance on the dataset. 
+In case you want to evaluate the performance on the validation dataset for real, (or you want to train with the full validation set), you should answer (n) when creating the validation set.
+
 
 ## Train the YOLO model
 First, adjust the paths on the custom.yaml file to point to the train and valid folders.

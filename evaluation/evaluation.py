@@ -93,6 +93,11 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3):
     ground_truth['detected'] = 0
     predictions['correct'] = 0
 
+    if ground_truth['end_datetime'].dt.tz is None:
+        ground_truth['end_datetime'] = ground_truth['end_datetime'].dt.tz_localize('UTC')
+    if ground_truth['start_datetime'].dt.tz is None:
+        ground_truth['start_datetime'] = ground_truth['start_datetime'].dt.tz_localize('UTC')
+
     for (dataset_name, wav_path_name), wav_predictions in tqdm(predictions.groupby(['dataset', 'filename']),
                                                total=len(predictions.filename.unique())):
         ground_truth_wav = ground_truth.loc[ground_truth['filename'] == wav_path_name]

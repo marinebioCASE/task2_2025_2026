@@ -14,6 +14,7 @@ def predict(ds, conf=0.1):
             results_list = model(source=str(ds.images_folder),
                                  project=str(ds.path_to_dataset),
                                  name=predictions_folder.name,
+                                 imgsz=640,
                                  stream=True,
                                  save=False, show=False, save_conf=True, save_txt=True, conf=conf,
                                  save_crop=False, agnostic_nms=True)
@@ -29,11 +30,11 @@ def predict(ds, conf=0.1):
 if __name__ == '__main__':
     path_to_dataset = input('Where is the dataset folder?')
 
-    config_path = './dataset_config.json'
+    config_path = './baselines/yolo/dataset_config.json'
     f = open(config_path)
     config = json.load(f)
 
-    with open('./custom_joined.yaml', 'r') as file:
+    with open('./baselines/yolo/custom_joined.yaml', 'r') as file:
         yolo_config = yaml.safe_load(file)
 
     yolo_ds = preprocess_data.YOLODataset(config, path_to_dataset)
