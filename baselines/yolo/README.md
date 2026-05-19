@@ -4,7 +4,7 @@ YOLOv11 is an object detector model which can be re-trained on custom data.
 To do so, the challenge data will have to be converted to the YOLO format. 
 
 > [!IMPORTANT]  
-> All the scripts from this baseline need to be run from the baselines/yolo folder (otherwise the configuration files 
+> All the scripts from this baseline need to be run from the main task2 folder (otherwise the configuration files 
 > specified in relative paths will not be found)
 
 ## Create the environment using poetry
@@ -100,3 +100,5 @@ python predict_and_convert_yolo_output.py
 ```
 
 When asked, point to the evaluation folder path and the model which should be used for evaluation. 
+
+The weights of the trained model for the baseline of 2026 can be found here: https://zenodo.org/records/20281116
