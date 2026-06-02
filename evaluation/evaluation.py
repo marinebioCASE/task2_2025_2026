@@ -107,6 +107,8 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3):
             if ground_truth_not_detected.empty:
                 continue
             for i, row in class_predictions.iterrows():
+                if ground_truth_not_detected.empty:
+                    continue
                 # For each row, compute the minimum end and maximum start with all the ground truths
                 min_end = np.minimum(row['end_datetime'], ground_truth_not_detected['end_datetime'])
                 max_start = np.maximum(row['start_datetime'], ground_truth_not_detected['start_datetime'])
@@ -119,6 +121,7 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3):
                 if iou.max() > iou_threshold:
                     predictions.loc[i, 'correct'] = 1
                     ground_truth_index = ground_truth_not_detected.iloc[iou.argmax()].name
+                    ground_truth_not_detected = ground_truth_not_detected.drop(ground_truth_index)
                     ground_truth.loc[ground_truth_index, 'detected'] = 1
 
     all_classes = ground_truth.annotation.unique()
