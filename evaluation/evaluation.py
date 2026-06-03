@@ -21,7 +21,7 @@ def compute_confusion_matrix(ground_truth, predictions, all_classes):
     :param all_classes: list of all the classes in the dataset
     :return: confusion matrix including tp, fp, fn, recall, precision
     """
-    conf_matrix = pd.DataFrame(columns=['tp', 'fp', 'fn'], index=ground_truth.annotation.unique())
+    conf_matrix = pd.DataFrame(columns=['tp', 'fp', 'fn'], index=all_classes)
     for class_id in all_classes:
         ground_truth_class = ground_truth.loc[ground_truth.annotation == class_id]
         class_predictions = predictions.loc[predictions.annotation == class_id]
@@ -124,7 +124,7 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3):
                     ground_truth_not_detected = ground_truth_not_detected.drop(ground_truth_index)
                     ground_truth.loc[ground_truth_index, 'detected'] = 1
 
-    all_classes = ground_truth.annotation.unique()
+    all_classes = ['bmabz', 'fm', 'bp']
     for dataset_name, conf_matrix_dataset in compute_confusion_matrix_per_dataset(ground_truth, predictions, all_classes):
         print(f'Results dataset {dataset_name}')
         print(conf_matrix_dataset)

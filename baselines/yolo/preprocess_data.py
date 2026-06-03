@@ -40,7 +40,7 @@ class YOLODataset:
 
         # Path to dataset
         self.path_to_dataset = pathlib.Path(path_to_dataset)
-        self.wavs_folder = self.path_to_dataset.joinpath('raw')
+        self.wavs_folder = self.path_to_dataset.joinpath('audio')
         self.annotations_folder = self.path_to_dataset.joinpath('annotations')
         self.images_folder = self.path_to_dataset.joinpath('images')
         self.labels_folder = self.path_to_dataset.joinpath('labels')
@@ -65,12 +65,11 @@ class YOLODataset:
     def create_train_dataset(self, class_encoding):
         indices_per_deployment = self.convert_challenge_annotations_to_yolo(class_encoding=class_encoding)
         selected_samples = self.select_background_labels(indices_per_deployment)
-        self.create_spectrograms(selected_samples=selected_samples)
+        self.create_spectrograms(selected_samples=selected_samples, selected_keys=['selected_background', 'labels'])
 
-    def create_test_dataset(self, class_encoding):
-        indices_per_deployment = self.convert_challenge_annotations_to_yolo(class_encoding=class_encoding)
-        selected_samples = self.select_all_background_labels(indices_per_deployment)
-        self.create_spectrograms(selected_samples=selected_samples)
+    def create_test_dataset(self):
+        indices_per_deployment = self.convert_challenge_annotations_to_yolo_evaluation()
+        self.create_spectrograms(selected_samples=indices_per_deployment, selected_keys=['all'])
 
     def select_all_background_labels(self, indices_per_deployment):
         for dataset, indices_dataset in indices_per_deployment.items():
@@ -99,11 +98,13 @@ class YOLODataset:
 
         return indices_per_deployment
 
-    def create_spectrograms(self, selected_samples, overwrite=True):
+    def create_spectrograms(self, selected_samples, selected_keys=['selected_background', 'labels'], overwrite=True):
         # First, create all the images
         print('Creating spectrograms...')
         for dataset, indices_dataset in selected_samples.items():
-            selected_indices = indices_dataset['selected_background'] + indices_dataset['labels']
+            selected_indices = []
+            for key in selected_keys: 
+                selected_indices += indices_dataset[key]
             for sample_i in tqdm(selected_indices):
                 img_path = self.images_folder.joinpath(sample_i + '.png')
                 wav_name = '_'.join(sample_i.split('_')[1:3])
@@ -241,7 +242,42 @@ class YOLODataset:
                     pbar.update(1)
 
                 
-                    indices_per_deployment[dataset_name] = {'background': background_indices, 'labels': labels_indices}
+                indices_per_deployment[dataset_name] = {'background': background_indices, 'labels': labels_indices}
+                pbar.close()
+     
+        return indices_per_deployment
+    
+
+    def convert_challenge_annotations_to_yolo_evaluation(self):
+        """
+        :param annotations_file:
+        :param labels_to_exclude: list
+        :param class_encoding: should be a dict with the name of the Tag as a key and an int as the value, for the
+        yolo classes
+        :return:
+        """
+        indices_per_deployment = {}
+        for dataset_raw_folder in list(self.wavs_folder.glob('*')):
+            if dataset_raw_folder.is_dir():
+                dataset_name = dataset_raw_folder.name
+                all_indices = []
+
+                # save audio snippet information for wav files with annotations
+                pbar = tqdm(total=len(list(self.wavs_folder.joinpath(dataset_name).glob('**/*.wav'))))
+
+                for wav_file_path in list(self.wavs_folder.joinpath(dataset_name).glob('**/*.wav')):
+                    wav_name = wav_file_path.name
+                    waveform_info = torchaudio.info(wav_file_path)
+
+                    i = 0.0
+                    while (i * self.duration) < (waveform_info.num_frames / waveform_info.sample_rate):
+                        new_name = dataset_name + '_' + wav_name.replace('.wav', '_%s' % i)
+                        all_indices.append(new_name)
+
+                        i += self.overlap
+                    pbar.update(1)
+
+                indices_per_deployment[dataset_name] = {'all': all_indices}
                 pbar.close()
      
         return indices_per_deployment
@@ -302,9 +338,8 @@ class YOLODataset:
 if __name__ == '__main__':
     path_to_dataset = input('Where is the dataset folder?')
 
-    train_mode = input('Is it for the training dataset y/n?') == 'y'
+    train_mode = input('Is it for the training/validation dataset y/n. If n is selected, then all the backgrounds will be selected for evaluation?') == 'y'
     config_path = './baselines/yolo/dataset_config.json'
-    #config_path = './dataset_config.json'
 
     f = open(config_path)
     config = json.load(f)
@@ -313,5 +348,5 @@ if __name__ == '__main__':
     if train_mode:
         ds.create_train_dataset(class_encoding=config['class_encoding'])
     else:
-        ds.create_test_dataset(class_encoding=config['class_encoding'])
+        ds.create_test_dataset()
 
