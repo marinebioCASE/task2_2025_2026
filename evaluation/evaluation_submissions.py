@@ -12,6 +12,7 @@ joining_dict = {'bma': 'bmabz',
                 'd': 'fm',
                 'bp20plus': 'bp'}
 
+labels_ground_truth = ['bmabz', 'fm', 'bp']
 
 def compute_confusion_matrix(ground_truth, predictions, all_classes):
     """
@@ -22,7 +23,7 @@ def compute_confusion_matrix(ground_truth, predictions, all_classes):
     :param all_classes: list of all the classes in the dataset
     :return: confusion matrix including tp, fp, fn, recall, precision
     """
-    conf_matrix = pd.DataFrame(columns=['tp', 'fp', 'fn'], index=ground_truth.annotation.unique())
+    conf_matrix = pd.DataFrame(columns=['tp', 'fp', 'fn'], index=labels_ground_truth)
     for class_id in all_classes:
         ground_truth_class = ground_truth.loc[ground_truth.annotation == class_id]
         class_predictions = predictions.loc[predictions.annotation == class_id]
@@ -100,7 +101,16 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3, conf_threshold=N
     ground_truth['detected'] = 0
     predictions['correct'] = 0
 
-    print(set(predictions.annotation.unique()) - set(ground_truth.annotation.unique()))
+    predictions.start_datetime = pd.to_datetime(predictions.start_datetime, format='ISO8601')
+    predictions.end_datetime = pd.to_datetime(predictions.end_datetime, format='ISO8601')
+
+
+    if ground_truth['end_datetime'].dt.tz is None:
+        ground_truth['end_datetime'] = ground_truth['end_datetime'].dt.tz_localize('UTC')
+    if ground_truth['start_datetime'].dt.tz is None:
+        ground_truth['start_datetime'] = ground_truth['start_datetime'].dt.tz_localize('UTC')
+
+    print(set(predictions.annotation.unique()) - set(labels_ground_truth))
 
     for (dataset_name, wav_path_name), wav_predictions in tqdm(predictions.groupby(['dataset', 'filename']),
                                                total=len(predictions.filename.unique())):
@@ -115,6 +125,8 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3, conf_threshold=N
             if ground_truth_not_detected.empty:
                 continue
             for i, row in class_predictions.iterrows():
+                if ground_truth_not_detected.empty:
+                    continue
                 # For each row, compute the minimum end and maximum start with all the ground truths
                 min_end = np.minimum(row['end_datetime'], ground_truth_not_detected['end_datetime'])
                 max_start = np.maximum(row['start_datetime'], ground_truth_not_detected['start_datetime'])
@@ -127,18 +139,18 @@ def run(predictions_path, ground_truth_path, iou_threshold=0.3, conf_threshold=N
                 if iou.max() > iou_threshold:
                     predictions.loc[i, 'correct'] = 1
                     ground_truth_index = ground_truth_not_detected.iloc[iou.argmax()].name
+                    ground_truth_not_detected = ground_truth_not_detected.drop(ground_truth_index)
                     ground_truth.loc[ground_truth_index, 'detected'] = 1
 
-    all_classes = ground_truth.annotation.unique()
     final_conf_matrix = None
-    for dataset_name, conf_matrix_dataset in compute_confusion_matrix_per_dataset(ground_truth, predictions, all_classes):
+    for dataset_name, conf_matrix_dataset in compute_confusion_matrix_per_dataset(ground_truth, predictions, labels_ground_truth):
         conf_matrix_dataset['dataset'] = dataset_name
         if final_conf_matrix is None:
             final_conf_matrix = conf_matrix_dataset
         else:
             final_conf_matrix = pd.concat([final_conf_matrix, conf_matrix_dataset], ignore_index=True)
 
-    conf_matrix = compute_confusion_matrix(ground_truth, predictions, all_classes)
+    conf_matrix = compute_confusion_matrix(ground_truth, predictions, labels_ground_truth)
     conf_matrix['dataset'] = 'joined'
     final_conf_matrix = pd.concat([final_conf_matrix, conf_matrix], ignore_index=True)
 
